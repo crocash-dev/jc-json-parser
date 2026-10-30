@@ -37,6 +37,8 @@
 
 (defparameter *lexical-tokens* '("{" "}" "[" "]" ":" ","))
 
+(defparameter *number-signs* '("+" "-"))
+
 (defparameter *token-types* '("colon" "comma" "string" "boolean" "null" "number")) 
 
 (defun main ()
@@ -52,16 +54,26 @@
 
 
 (defun lexer (input-string)
-  (let ((lex-list '()) (temp-string ""))
+  (let ((lex-list '()))
     (iter (for i from 0 to (- (length input-string) 1))
+      ;; if a lexical symbol, push to list
       (cond ((member (char input-string i) *lexical-tokens* :test #'string=)
-	     (push char lex-list))
-	    ((string= char "\"")
-	     (push (subseq input-file (char input-string i) (get-closing-quote-index input-string i)) lex-list)
+	     (push (char input-string i) lex-list))
+	    ;; if a string, extract it as a string, and set i to index of last quote
+	    ((string= (char input-string i) "\"")
+	     (push (subseq input-string (+ i 1) (get-closing-quote-index input-string i)) lex-list)
 	     (setf i (get-closing-quote-index input-string i)))
-	    ((numberp char)
-	     (push))))))
-	     
+	    ;; if a number, extract it as a string, and set i to closing-index -1 to capture any symbols following
+	    ((or (member (char input-string i) *number-signs* :test #'string=)
+		 (digit-char-p (char input-string i)))
+	     (push (subseq input-string i (get-closing-index input-string i)) lex-list)
+	     (setf i (- (get-closing-index input-string i) 1)))
+	    ;; Same for booleans as numbers
+	    ((or (string= (char input-string i) "t") (string= (char input-string i) "f"))
+	     (push (subseq input-string i (get-closing-index input-string i)) lex-list)
+	     (setf i (- (get-closing-index input-string i) 1)))))
+    lex-list))
+
 
 (defun get-closing-quote-index (input-string starting-index)
   "Gets index of closing quote given input-string and index of opening quote as starting-index"
@@ -69,11 +81,15 @@
 	(when (string= (char input-string i) "\"")
 	  (leave i))))
 
-(defun get-closing-number-index (input-string starting-index)
-  "Gets the index of the last digit of the number given the index of the first digit of the number as starting-index"
+(defun get-closing-index (input-string starting-index)
+  "Gets the index of the character which terminates the number or
+   identifier e.g. whitespace given the index of the first digit or letter as starting-index"
   (iter (for i from starting-index to (- (length input-string) 1))
-    (when (or (string= (char input-string i) " ") (member (char input-string i) *lexical-tokens*) :test #'string=)
-      (leave (- i 1)))))
+    (cond ((string= (char input-string i) " ")
+	   (leave i))
+	  ((member (char input-string i) *lexical-tokens* :test #'string=)
+	   (leave i)))))
+	 
 
 (defun valid-multiple-pairs-p (input-string)
   ;; Totally broken
