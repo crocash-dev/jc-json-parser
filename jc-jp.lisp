@@ -119,6 +119,7 @@
 	 
 
 (defun valid-value-p (input)
+  ;; Needs testing TODO 30/10/2026
   (cond ((member input *lexical-reserved-symbols*)
 	 't)
 	 ((and
