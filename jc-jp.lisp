@@ -94,7 +94,7 @@
 	     (setf end-index (get-closing-index input-string i))
 	     (if end-index
 		 (progn
-		   (push (extract-boolean-or-null input-string i (get-closing-index input-string i)) lex-list)
+		   (push (extract-boolean-or-null input-string i end-index) lex-list)
 		   (setf i (- end-index 1)))
 		 (push 'nil lex-list)))))
     (reverse lex-list)))
