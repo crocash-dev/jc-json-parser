@@ -81,8 +81,9 @@
 		 (digit-char-p (char input-string i)))
 	     (setf end-index (get-closing-index input-string i))
 	     (if end-index 
-		 (progn (push (extract-valid-number input-string i end-index) lex-list)
-			(setf i (- end-index 1)))
+		 (progn
+		   (push (extract-valid-number input-string i end-index) lex-list)
+		   (setf i (- end-index 1)))
 		 (push 'nil lex-list)))
 	    ;; Same for booleans as numbers
 	    ((or (string= (char input-string i) "t")
