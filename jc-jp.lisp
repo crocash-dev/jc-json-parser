@@ -1,6 +1,7 @@
 (defpackage #:jc-jp
   (:use #:common-lisp
-	#:iterate)
+	#:iterate
+	#:parse-number)
   (:export #:main))
 
 (in-package #:jc-jp)
@@ -32,10 +33,18 @@
   key2: \"value\"
 }")
 
+(defparameter *lexer-test1* "{\"key1\": \"value1\", \"key2\": -112.5, \"key3\": 112.5, \"key4\": 56, \"key5\": null, \"key6\": true, \"key7\": false}")
+(defparameter *lexer-test1-false* "{\"key1\": \"value1\", \"key2\": -112.5, \"key3\": 11S2.5, \"key4\": 5G6, \"key5\": noggin, \"key6\": tree, \"key7\": false")
+
+(defparameter *lexer-test2-false* "{\"key1\": \"value1, \"key2\": -112.5}") ; missing closing quote
+
+(defparameter *lexer-test3-false* "{\"key1\": \"value1\", \"key2\: -112.5, \"key3\": 112.5, \key4\": 56, \"key5\"\"\"\"\": null, \"key6\": true, \"key7\": false}") ;even number of messed up closing quotes
+
 
 ;; Parameters
-
 (defparameter *lexical-tokens* '("{" "}" "[" "]" ":" ","))
+
+(defparameter *lexical-reserved-symbols* '(true false null))
 
 (defparameter *number-signs* '("+" "-"))
 
@@ -53,37 +62,71 @@
 	  ('t (format t "Invalid CLI argument. Please provide a file to parse.")))))
 
 
+
+
 (defun lexer (input-string)
-  (let ((lex-list '()))
+  (let ((lex-list '()) (end-index 0))
     (iter (for i from 0 to (- (length input-string) 1))
       ;; if a lexical symbol, push to list
       (cond ((member (char input-string i) *lexical-tokens* :test #'string=)
 	     (push (char input-string i) lex-list))
 	    ;; if a string, extract it as a string, and set i to index of last quote
 	    ((string= (char input-string i) "\"")
-	     (push (subseq input-string (+ i 1) (get-closing-quote-index input-string i)) lex-list)
-	     (setf i (get-closing-quote-index input-string i)))
+	     (setf end-index (get-closing-quote-index input-string i))
+	     (if end-index
+		 (progn
+		   (push (subseq input-string (+ i 1) (get-closing-quote-index input-string i)) lex-list)
+		   (setf i end-index))
+		 (push 'nil lex-list)))
 	    ;; if a number, extract it as a string, and set i to closing-index -1 to capture any symbols following
 	    ((or (member (char input-string i) *number-signs* :test #'string=)
 		 (digit-char-p (char input-string i)))
-	     (push (subseq input-string i (get-closing-index input-string i)) lex-list)
-	     (setf i (- (get-closing-index input-string i) 1)))
+	     (setf end-index (get-closing-index input-string i))
+	     (if end-index 
+		 (progn (push (extract-valid-number input-string i end-index) lex-list)
+			(setf i (- end-index 1)))
+		 (push 'nil lex-list)))
 	    ;; Same for booleans as numbers
-	    ((or (string= (char input-string i) "t") (string= (char input-string i) "f"))
-	     (push (subseq input-string i (get-closing-index input-string i)) lex-list)
-	     (setf i (- (get-closing-index input-string i) 1)))))
-    lex-list))
+	    ((or (string= (char input-string i) "t")
+		 (string= (char input-string i) "f")
+		 (string= (char input-string i) "n"))
+	     (setf end-index (get-closing-index input-string i))
+	     (if end-index
+		 (progn
+		   (push (extract-boolean-or-null input-string i (get-closing-index input-string i)) lex-list)
+		   (setf i (- (get-closing-index input-string i) 1)))
+		 (push 'nil lex-list)))))
+    (reverse lex-list)))
 
+(defun extract-valid-number (input-string starting-index ending-index)
+  "Returns string as number or NIL if invalid number"
+  (let ((compare-string ""))
+    (setf compare-string (subseq input-string starting-index ending-index))
+    (handler-case
+	(parse-number:parse-number compare-string)
+      (error ()
+	'nil))))
+
+(defun extract-boolean-or-null (input-string starting-index ending-index)
+  "Extracts booleans true and false and null as symbols, or returns nil if no match found"
+  (let ((compare-string ""))
+    (setf compare-string (subseq input-string starting-index ending-index))
+    (cond ((string= compare-string "true")
+	   'true)
+	  ((string= compare-string "false")
+	   'false)
+	  ((string= compare-string "null")
+	   'null)
+	  ('t 'nil))))
 
 (defun get-closing-quote-index (input-string starting-index)
-  "Gets index of closing quote given input-string and index of opening quote as starting-index"
+  "Gets index of closing quote given input-string and index of opening quote as starting-index, or Nil if none"
   (iter (for i from (+ starting-index 1) to (- (length input-string) 1))
-	(when (string= (char input-string i) "\"")
+    (when (string= (char input-string i) "\"")
 	  (leave i))))
 
 (defun get-closing-index (input-string starting-index)
-  "Gets the index of the character which terminates the number or
-   identifier e.g. whitespace given the index of the first digit or letter as starting-index"
+  "Gets the end-index of the character which terminates the number, boolean, or null, and returns Nil when there is no end-index found"
   (iter (for i from starting-index to (- (length input-string) 1))
     (cond ((string= (char input-string i) " ")
 	   (leave i))
@@ -91,25 +134,25 @@
 	   (leave i)))))
 	 
 
-(defun valid-multiple-pairs-p (input-string)
-  ;; Totally broken
-  (let ((temp-string "") (previous-char "") (comma-present 'nil) (num-commas 0) (num-valid-pairs 0))
-    (iter (for char in-string input-string)
-      (setf temp-string (concatenate 'string temp-string (string char)))
-      (cond ((and (string= previous-char ",") (valid-pair-plus-comma-p temp-string))
-	     (format t "plus-comma: ~D" temp-string)
-	     (incf num-commas)
-	     (setf comma-present 't)
-	     (incf num-valid-pairs)
-	     (setf temp-string ""))
-	    ((valid-key-value-pair-p temp-string)
-	     (format t "no-comma: ~D" temp-string)
-	     (incf num-valid-pairs)
-	     (setf temp-string "")))
-      (setf previous-char char))
-    (format t "commas=~D valid-pairs=~D comma-present=~S~%"
-        num-commas num-valid-pairs comma-present)
-    (or (and (not comma-present) (= num-valid-pairs 1)) (= (- num-valid-pairs 1) num-commas))))
+;; (defun valid-multiple-pairs-p (input-string)
+;;   ;; Totally broken
+;;   (let ((temp-string "") (previous-char "") (comma-present 'nil) (num-commas 0) (num-valid-pairs 0))
+;;     (iter (for char in-string input-string)
+;;       (setf temp-string (concatenate 'string temp-string (string char)))
+;;       (cond ((and (string= previous-char ",") (valid-pair-plus-comma-p temp-string))
+;; 	     (format t "plus-comma: ~D" temp-string)
+;; 	     (incf num-commas)
+;; 	     (setf comma-present 't)
+;; 	     (incf num-valid-pairs)
+;; 	     (setf temp-string ""))
+;; 	    ((valid-key-value-pair-p temp-string)
+;; 	     (format t "no-comma: ~D" temp-string)
+;; 	     (incf num-valid-pairs)
+;; 	     (setf temp-string "")))
+;;       (setf previous-char char))
+;;     (format t "commas=~D valid-pairs=~D comma-present=~S~%"
+;;         num-commas num-valid-pairs comma-present)
+;;     (or (and (not comma-present) (= num-valid-pairs 1)) (= (- num-valid-pairs 1) num-commas))))
 
 
 (defun valid-pair-plus-comma-p (input-string)
