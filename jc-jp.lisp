@@ -62,8 +62,6 @@
 	  ('t (format t "Invalid CLI argument. Please provide a file to parse.")))))
 
 
-
-
 (defun lexer (input-string)
   (let ((lex-list '()) (end-index 0))
     (iter (for i from 0 to (- (length input-string) 1))
@@ -97,6 +95,7 @@
 		   (setf i (- (get-closing-index input-string i) 1)))
 		 (push 'nil lex-list)))))
     (reverse lex-list)))
+
 
 (defun extract-valid-number (input-string starting-index ending-index)
   "Returns string as number or NIL if invalid number"
