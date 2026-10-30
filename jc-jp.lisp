@@ -11,38 +11,52 @@
 ;; Exit with Code 0 for success and Code 1 for invalid
 
 ;; Testing Parameters
-(defparameter *input-file* "./tests/step1/valid.json")
-(defparameter *test-pair* "{\"key\": \"value\"}")
 
+;; key validity testing params
+(defparameter *test-key1* "key1")
+(defparameter *test-key1-false* #\,)
+(defparameter *test-key2-false* 5)
+(defparameter *test-key3-false* 'false)
+
+;; value validity testing params
+(defparameter *test-value1* "value1")
+(defparameter *test-value2* 2)
+(defparameter *test-value3* 'null)
+(defparameter *test-value4* 'true)
+(defparameter *test-value5* 'false)
+(defparameter *test-value1-false* #\})
+
+;; testing file
+(defparameter *input-file* "./tests/step1/valid.json")
+
+
+;; pairs testing params
+(defparameter *test-pair* "{\"key\": \"value\"}")
 (defparameter *test-pair-comma* "{\"key\": \"value\",}")
 (defparameter *false-test-pair-comma* "{\"key\": \value\",}")
-
 (defparameter *false-test-pair1* "\"key\": \"value\"}")
 (defparameter *false-test-pair2* "{\"key\" \"value\"}")
 (defparameter *false-test-pair3* "{\"key\": value\"}")
 (defparameter *false-test-pair4* "\"key\": value\"}")
-
-
 (defparameter *test-multiple-pairs* "{
   \"key\": \"value\",
   \"key2\": \"value\"
 }")
-
 (defparameter *false-multiple-pairs* "{
   \"key\": \"value\",
   key2: \"value\"
 }")
 
+;; lexer testing
 (defparameter *lexer-test1* "{\"key1\": \"value1\", \"key2\": -112.5, \"key3\": 112.5, \"key4\": 56, \"key5\": null, \"key6\": true, \"key7\": false}")
 (defparameter *lexer-test1-false* "{\"key1\": \"value1\", \"key2\": -112.5, \"key3\": 11S2.5, \"key4\": 5G6, \"key5\": noggin, \"key6\": tree, \"key7\": false")
 
 (defparameter *lexer-test2-false* "{\"key1\": \"value1, \"key2\": -112.5}") ; missing closing quote
-
 (defparameter *lexer-test3-false* "{\"key1\": \"value1\", \"key2\: -112.5, \"key3\": 112.5, \key4\": 56, \"key5\"\"\"\"\": null, \"key6\": true, \"key7\": false}") ;even number of messed up closing quotes
 
 
-;; Parameters
-(defparameter *lexical-tokens* '("{" "}" "[" "]" ":" ","))
+;; Program Parameters
+(defparameter *lexical-tokens* '(#\{ #\} #\[ #\] #\: #\,))
 
 (defparameter *lexical-reserved-symbols* '(true false null))
 
@@ -75,7 +89,7 @@
 	     (setf end-index (get-closing-quote-index input-string i))
 	     (if end-index
 		 (progn
-		   (push (subseq input-string (+ i 1) (get-closing-quote-index input-string i)) lex-list)
+		   (push (extract-valid-string input-string i end-index) lex-list)
 		   (setf i end-index))
 		 (push 'nil lex-list)))
 	    ;; if a number, extract it as a string, and set i to closing-index -1 to capture any symbols following
@@ -98,6 +112,27 @@
 		   (setf i (- end-index 1)))
 		 (push 'nil lex-list)))))
     (reverse lex-list)))
+
+(defun valid-key-p (input)
+  (and (not (member input *lexical-tokens* :test #'eql)) (stringp input)))
+	 
+
+(defun valid-value-p (input)
+  (cond ((member input *lexical-reserved-symbols*)
+	 't)
+	 ((and
+	   (not (member input *lexical-tokens* :test #'eql))
+	   (stringp input))
+	  't)
+	((numberp input)
+	 't)
+	('t 'nil)))
+
+(defun extract-valid-string (input-string starting-index ending-index)
+  "Extracts the substring at starting-index + 1 (to cut off initial quote mark)
+   and ends at ending-index - 1, as end is not included by subseq, cutting off
+   the ending quote mark of the string."
+   (subseq input-string (+ starting-index 1) ending-index))
 
 
 (defun extract-valid-number (input-string starting-index ending-index)
