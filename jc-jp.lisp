@@ -32,6 +32,11 @@
   key2: \"value\"
 }")
 
+
+;; Parameters
+
+(defparameter *lexical-tokens* '("{" "}" "[" "]" ":" ","))
+
 (defparameter *token-types* '("colon" "comma" "string" "boolean" "null" "number")) 
 
 (defun main ()
@@ -45,6 +50,30 @@
 	     (format t "~A" data)))
 	  ('t (format t "Invalid CLI argument. Please provide a file to parse.")))))
 
+
+(defun lexer (input-string)
+  (let ((lex-list '()) (temp-string ""))
+    (iter (for i from 0 to (- (length input-string) 1))
+      (cond ((member (char input-string i) *lexical-tokens* :test #'string=)
+	     (push char lex-list))
+	    ((string= char "\"")
+	     (push (subseq input-file (char input-string i) (get-closing-quote-index input-string i)) lex-list)
+	     (setf i (get-closing-quote-index input-string i)))
+	    ((numberp char)
+	     (push))))))
+	     
+
+(defun get-closing-quote-index (input-string starting-index)
+  "Gets index of closing quote given input-string and index of opening quote as starting-index"
+  (iter (for i from (+ starting-index 1) to (- (length input-string) 1))
+	(when (string= (char input-string i) "\"")
+	  (leave i))))
+
+(defun get-closing-number-index (input-string starting-index)
+  "Gets the index of the last digit of the number given the index of the first digit of the number as starting-index"
+  (iter (for i from starting-index to (- (length input-string) 1))
+    (when (or (string= (char input-string i) " ") (member (char input-string i) *lexical-tokens*) :test #'string=)
+      (leave (- i 1)))))
 
 (defun valid-multiple-pairs-p (input-string)
   ;; Totally broken
