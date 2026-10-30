@@ -10,7 +10,7 @@
 ;; Reports to Standard Output a suitable message
 ;; Exit with Code 0 for success and Code 1 for invalid
 
-;; Testing
+;; Testing Parameters
 (defparameter *input-file* "./tests/step1/valid.json")
 (defparameter *test-pair* "{\"key\": \"value\"}")
 
@@ -50,6 +50,7 @@
 
 (defparameter *token-types* '("colon" "comma" "string" "boolean" "null" "number")) 
 
+
 (defun main ()
   ;; Executable name is first argv, take REST to discard
   (let* ((args (rest sb-ext:*posix-argv*)))
@@ -63,7 +64,8 @@
 
 
 (defun lexer (input-string)
-  (let ((lex-list '()) (end-index 0))
+  "Returns either valid tokens or NIL where there is an unclosed string, invalid number, or invalid boolean or null"
+  (let ((lex-list '()) (end-index 'nil))
     (iter (for i from 0 to (- (length input-string) 1))
       ;; if a lexical symbol, push to list
       (cond ((member (char input-string i) *lexical-tokens* :test #'string=)
@@ -93,7 +95,7 @@
 	     (if end-index
 		 (progn
 		   (push (extract-boolean-or-null input-string i (get-closing-index input-string i)) lex-list)
-		   (setf i (- (get-closing-index input-string i) 1)))
+		   (setf i (- end-index 1)))
 		 (push 'nil lex-list)))))
     (reverse lex-list)))
 
@@ -123,7 +125,7 @@
   "Gets index of closing quote given input-string and index of opening quote as starting-index, or Nil if none"
   (iter (for i from (+ starting-index 1) to (- (length input-string) 1))
     (when (string= (char input-string i) "\"")
-	  (leave i))))
+      (leave i))))
 
 (defun get-closing-index (input-string starting-index)
   "Gets the end-index of the character which terminates the number, boolean, or null, and returns Nil when there is no end-index found"
@@ -133,6 +135,18 @@
 	  ((member (char input-string i) *lexical-tokens* :test #'string=)
 	   (leave i)))))
 	 
+
+(defun valid-curly-brackets-p (input-string)
+  (let ((curly-nesting-level 0) (token-found-p 'nil))
+    (iter (for char in-string input-string)
+      (cond ((string= char "{")
+	     (incf curly-nesting-level)
+	     (setf token-found-p 't))
+	    ((string= char "}")
+	     (decf curly-nesting-level)
+	     (setf token-found-p 't))))
+    (and token-found-p (= curly-nesting-level 0))))
+
 
 ;; (defun valid-multiple-pairs-p (input-string)
 ;;   ;; Totally broken
@@ -155,56 +169,46 @@
 ;;     (or (and (not comma-present) (= num-valid-pairs 1)) (= (- num-valid-pairs 1) num-commas))))
 
 
-(defun valid-pair-plus-comma-p (input-string)
-  (let ((comma-present 'nil) (valid-pair 'nil) (temp-string ""))
-    (iter (for char in-string input-string)
-      (setf temp-string (concatenate 'string temp-string (string char)))
-      (if (valid-key-value-pair-p temp-string) (setf valid-pair 't))
-      (cond ((string= char ",")
-	     (setf comma-present 't))))
-    (and valid-pair comma-present)))
+;; (defun valid-pair-plus-comma-p (input-string)
+;;   (let ((comma-present 'nil) (valid-pair 'nil) (temp-string ""))
+;;     (iter (for char in-string input-string)
+;;       (setf temp-string (concatenate 'string temp-string (string char)))
+;;       (if (valid-key-value-pair-p temp-string) (setf valid-pair 't))
+;;       (cond ((string= char ",")
+;; 	     (setf comma-present 't))))
+;;     (and valid-pair comma-present)))
 
-(defun valid-key-value-pair-p (input-string)
-  (let ((temp-string "")
-	(brackets-open 'nil)
-	(num-strings 0)
-	(valid-colon 'nil)
-	(valid-brackets (valid-brackets-p input-string)))
-    (iter (for char in-string input-string)
-      (setf temp-string (concatenate 'string temp-string (string char)))
-      (cond ((string= char "{")
-	     (setf brackets-open 't))
-	    ((and brackets-open (valid-string-p temp-string) (< num-strings 2))
-	     (incf num-strings)
-	     (setf temp-string ""))
-	    ((and brackets-open (= num-strings 1) (string= char ":"))
-	     (setf valid-colon 't)
-	     (setf temp-string ""))
-	    ((and brackets-open (= num-strings 1) (valid-string-p temp-string))
-	     (incf num-strings)
-	     (setf temp-string ""))))
-    (and (= num-strings 2) valid-colon valid-brackets)))
+;; (defun valid-key-value-pair-p (input-string)
+;;   (let ((temp-string "")
+;; 	(brackets-open 'nil)
+;; 	(num-strings 0)
+;; 	(valid-colon 'nil)
+;; 	(valid-brackets (valid-brackets-p input-string)))
+;;     (iter (for char in-string input-string)
+;;       (setf temp-string (concatenate 'string temp-string (string char)))
+;;       (cond ((string= char "{")
+;; 	     (setf brackets-open 't))
+;; 	    ((and brackets-open (valid-string-p temp-string) (< num-strings 2))
+;; 	     (incf num-strings)
+;; 	     (setf temp-string ""))
+;; 	    ((and brackets-open (= num-strings 1) (string= char ":"))
+;; 	     (setf valid-colon 't)
+;; 	     (setf temp-string ""))
+;; 	    ((and brackets-open (= num-strings 1) (valid-string-p temp-string))
+;; 	     (incf num-strings)
+;; 	     (setf temp-string ""))))
+;;     (and (= num-strings 2) valid-colon valid-brackets)))
 
 
-(defun valid-string-p (input-string)
-  (let ((string-opened-p 'nil) (string-found-p 'nil))
-    (iter (for char in-string input-string)
-      (cond ((and (not string-opened-p) (string= char "\""))
-	     (setf string-found-p 't)
-	     (setf string-opened-p 't))
-	    ((and string-opened-p (string= char "\""))
-	     (setf string-found-p 't)
-	     (setf string-opened-p 'nil))))
-    (and string-found-p (not string-opened-p))))
+;; (defun valid-string-p (input-string)
+;;   (let ((string-opened-p 'nil) (string-found-p 'nil))
+;;     (iter (for char in-string input-string)
+;;       (cond ((and (not string-opened-p) (string= char "\""))
+;; 	     (setf string-found-p 't)
+;; 	     (setf string-opened-p 't))
+;; 	    ((and string-opened-p (string= char "\""))
+;; 	     (setf string-found-p 't)
+;; 	     (setf string-opened-p 'nil))))
+;;     (and string-found-p (not string-opened-p))))
 	    
 
-(defun valid-brackets-p (input-string)
-  (let ((curly-nesting-level 0) (token-found-p 'nil))
-    (iter (for char in-string input-string)
-      (cond ((string= char "{")
-	     (incf curly-nesting-level)
-	     (setf token-found-p 't))
-	    ((string= char "}")
-	     (decf curly-nesting-level)
-	     (setf token-found-p 't))))
-    (and token-found-p (= curly-nesting-level 0))))
