@@ -78,7 +78,7 @@
 
 
 (defun lexer (input-string)
-  "Returns either valid tokens or NIL where there is an unclosed string, invalid number, or invalid boolean or null"
+  "Returns either valid tokens or NIL where there is an unclosed string, invalid number, or invalid boolean or invalid null"
   (let ((lex-list '()) (end-index 'nil))
     (iter (for i from 0 to (- (length input-string) 1))
       ;; if a lexical symbol, push to list
@@ -112,6 +112,7 @@
 		   (setf i (- end-index 1)))
 		 (push 'nil lex-list)))))
     (reverse lex-list)))
+
 
 (defun valid-key-p (input)
   (and (not (member input *lexical-tokens* :test #'eql)) (stringp input)))
